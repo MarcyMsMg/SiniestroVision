@@ -1,0 +1,59 @@
+{
+  "_nota": "Costos de mercado en Santiago, octubre 2026. costo_base_clp = reparación de un daño MODERADO en esa pieza para un sedán de gama media, en taller particular con repuestos alternativos. Leve y grave se obtienen con factor_severidad. Fuentes en _fuentes; los valores marcados como estimación en _criterio no tienen un precio publicado directo.",
+  "_fuentes": {
+    "choque.cl, 25-05-2026": "Abollón leve en puerta 80-200 mil; paragolpes delantero partido 150-400 mil; capó con abollón moderado 200-500 mil; guardafango con abollón 120-350 mil; espejo retrovisor roto 60-180 mil; óptica delantera quebrada 80-600 mil; autos premium o concesionario x1,5 a x2,5. https://choque.cl/blog/cuanto-cuesta-reparar-auto-chocado-chile",
+    "VASBAL, 23-06-2026": "Pintura de pieza suelta (capó, puerta, techo, tapa de maletero, parachoques) desde 160 mil. https://desabolladuravasbal.cl/blog/cuanto-cuesta-pintar-capo-puerta-o-techo",
+    "2x3.cl, 05-05-2026": "Desabolladura y pintura: 100-400 mil, promedio 200 mil. https://www.2x3.cl/p/precios-desabolladura-pintado-auto",
+    "2x3.cl, 01-03-2026": "Reparación de parabrisas (piquetes y trizaduras): 30-150 mil. https://www.2x3.cl/p/precios-reparacion-parabrisas",
+    "Full Parabrisas, octubre 2026": "Parabrisas homologado Peugeot 208 2020-2023: 238.700 (solo repuesto). https://fullparabrisas.cl/shop/"
+  },
+  "_criterio": {
+    "Parachoques delantero": "Centro del rango 150-400 mil (choque.cl)",
+    "Parachoques trasero": "Estimación: algo menor que el delantero, que tiene más sensores y rejillas",
+    "Puerta": "Sobre el rango del abollón leve (80-200 mil) y sobre el piso de pintura de 160 mil (VASBAL)",
+    "Capó": "Centro del rango del abollón moderado 200-500 mil (choque.cl)",
+    "Guardabarros / tapabarro": "Centro del rango 120-350 mil (choque.cl)",
+    "Maletero / portalón": "Estimación: panel menor que el capó, sobre el piso de pintura de 160 mil (VASBAL)",
+    "Techo": "Estimación: panel grande y horizontal, requiere más preparación (VASBAL)",
+    "Espejo lateral": "Centro del rango 60-180 mil (choque.cl)",
+    "Foco / faro": "Parte baja del rango 80-600 mil (choque.cl): ópticas halógenas de gama media",
+    "Parabrisas / vidrio": "Repuesto homologado 238.700 (Full Parabrisas) más instalación estimada",
+    "factor_severidad": "Leve y grave según los extremos de los rangos publicados (cerca de x0,5 y x1,5 del centro); grave sube a x2,0 porque suele implicar reemplazo de pieza",
+    "factor_vehiculo": "Gama alta x2,0 según el rango premium x1,5-2,5 (choque.cl); SUV y citycar son estimaciones por tamaño de panel"
+  },
+  "moneda": "CLP",
+  "costo_base_clp": {
+    "Parachoques delantero": 270000,
+    "Parachoques trasero": 250000,
+    "Puerta": 220000,
+    "Capó": 350000,
+    "Guardabarros / tapabarro": 230000,
+    "Maletero / portalón": 260000,
+    "Techo": 300000,
+    "Espejo lateral": 120000,
+    "Foco / faro": 220000,
+    "Parabrisas / vidrio": 290000
+  },
+  "factor_severidad": {
+    "leve": 0.5,
+    "moderado": 1.0,
+    "grave": 2.0
+  },
+  "factor_vehiculo": {
+    "Citycar / hatchback": 0.9,
+    "Sedán": 1.0,
+    "SUV / camioneta": 1.25,
+    "Gama alta": 2.0
+  },
+  "mapeo_etiquetas": {
+    "minor": "leve",
+    "moderate": "moderado",
+    "severe": "grave",
+    "leve": "leve",
+    "moderado": "moderado",
+    "grave": "grave"
+  },
+  "umbral_confianza": 0.6,
+  "umbral_perdida_total": 0.75,
+  "margen_estimacion": 0.3
+}

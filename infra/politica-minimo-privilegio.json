@@ -1,0 +1,29 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "FotosDeSiniestros",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::TU-BUCKET/siniestros/*"
+    },
+    {
+      "Sid": "DescargarCodigoYModelo",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": "arn:aws:s3:::TU-BUCKET/codigo/*"
+    },
+    {
+      "Sid": "ListarSoloEsteBucket",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::TU-BUCKET"
+    },
+    {
+      "Sid": "TablaDeCasos",
+      "Effect": "Allow",
+      "Action": ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:Scan"],
+      "Resource": "arn:aws:dynamodb:us-east-2:TU-ID-DE-CUENTA:table/siniestros"
+    }
+  ]
+}

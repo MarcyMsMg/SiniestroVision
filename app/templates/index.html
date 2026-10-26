@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block titulo %}Evalúa el daño de tu auto · SiniestroVision{% endblock %}
+{% block contenido %}
+<main class="contenedor">
+  <section class="intro">
+    <h1>Saca una foto del daño y conoce el costo estimado en segundos</h1>
+    <p>Te decimos qué tan grave es, cuánto costaría repararlo y cuál es el siguiente paso con tu seguro.</p>
+  </section>
+
+  <div class="flujo">
+    <form class="hoja" id="form" novalidate>
+      <section class="paso">
+        <div class="paso-num" aria-hidden="true">1</div>
+        <div>
+          <h2>Foto del daño</h2>
+          <div class="zona" id="zona" tabindex="0" role="button" aria-describedby="zonaAyuda">
+            <img id="vista" alt="Vista previa de la foto" hidden>
+            <div id="zonaTexto">
+              <strong>Toca para tomar o subir una foto</strong>
+              <span id="zonaAyuda">También puedes arrastrarla aquí. JPG o PNG, hasta 10 MB.</span>
+            </div>
+            <span class="cambiar" id="cambiar" hidden>Cambiar foto</span>
+          </div>
+          <input type="file" id="foto" name="foto" accept="image/*" class="sr" tabindex="-1">
+          <p class="ayuda">Encuadra la zona dañada completa, con buena luz y a un par de metros.</p>
+        </div>
+      </section>
+
+      <section class="paso">
+        <div class="paso-num" aria-hidden="true">2</div>
+        <div>
+          <h2>Tu vehículo</h2>
+          <div class="campo">
+            <label for="pieza">Parte más dañada</label>
+            <select id="pieza" name="pieza">
+              {% for p in piezas %}<option>{{ p }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="campo" style="margin-bottom:0">
+            <label for="vehiculo">Tipo de vehículo</label>
+            <select id="vehiculo" name="vehiculo">
+              {% for v in vehiculos %}<option {% if v == 'Sedán' %}selected{% endif %}>{{ v }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="paso">
+        <div class="paso-num" aria-hidden="true">3</div>
+        <div>
+          <h2>Tu póliza</h2>
+          <div class="par">
+            <div>
+              <label for="deducible">Deducible</label>
+              <div class="prefijo"><span>$</span><input type="text" id="deducible" name="deducible" inputmode="numeric" placeholder="150.000"></div>
+            </div>
+            <div>
+              <label for="valor">Valor del auto</label>
+              <div class="prefijo"><span>$</span><input type="text" id="valor" name="valor_comercial" inputmode="numeric" placeholder="9.000.000"></div>
+            </div>
+          </div>
+          <p class="ayuda">Opcional. El deducible aparece en tu póliza; el valor es el precio aproximado de tu auto hoy.</p>
+        </div>
+      </section>
+
+      <div class="enviar">
+        <button type="submit" class="boton ancho" id="boton">Evaluar daño</button>
+        <div class="error" id="error" role="alert"></div>
+      </div>
+    </form>
+
+    <section class="hoja resultado" id="resultado" aria-live="polite">
+      <div class="resultado-vacio">
+        <h2>Tu resultado aparecerá aquí</h2>
+        <p>Con la foto y los datos de tu auto obtienes:</p>
+        <ol>
+          <li>La gravedad del daño: leve, moderado o grave.</li>
+          <li>Un costo estimado de reparación.</li>
+          <li>El siguiente paso con tu seguro y un número de caso para hacer seguimiento.</li>
+        </ol>
+      </div>
+    </section>
+  </div>
+
+  <footer class="pie">
+    Los montos son estimaciones referenciales de mercado. La evaluación final la realiza un liquidador de tu compañía de seguros.
+    <a href="{{ url_for('panel_casos') }}">Acceso liquidadores</a>
+  </footer>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const $ = (id) => document.getElementById(id);
+
+const DECISIONES = {
+  aprobacion: {tono: "ok", tipo: "Aprobación rápida", titulo: "Puedes reparar tu auto en un taller en convenio",
+    texto: "El daño se puede resolver sin inspección. Te contactaremos para coordinar la hora en el taller."},
+  bajo_deducible: {tono: "info", tipo: "Bajo tu deducible", titulo: "La reparación costaría menos que tu deducible",
+    texto: "Reclamar probablemente no te conviene, porque pagarías el deducible completo. Si igual quieres hacerlo, guarda tu número de caso."},
+  revision: {tono: "revision", tipo: "Revisión de un liquidador", titulo: "Un liquidador revisará tu caso",
+    texto: "La foto no basta para una evaluación segura. Un liquidador la revisará y te contactará para confirmar el daño."},
+  inspeccion: {tono: "grave", tipo: "Inspección presencial", titulo: "El daño requiere una inspección presencial",
+    texto: "Por la gravedad del daño, un liquidador debe ver el auto antes de aprobar la reparación. Te contactaremos para coordinarla."},
+  perdida_total: {tono: "grave", tipo: "Posible pérdida total", titulo: "La reparación podría acercarse al valor de tu auto",
+    texto: "Un liquidador evaluará si corresponde declarar pérdida total. Te contactaremos con los pasos a seguir."},
+};
+
+const zona = $("zona"), input = $("foto");
+function elegirArchivo(f) {
+  if (!f) return;
+  if (!f.type.startsWith("image/")) { $("error").textContent = "El archivo debe ser una imagen (JPG o PNG)."; return; }
+  const dt = new DataTransfer(); dt.items.add(f); input.files = dt.files;
+  $("vista").src = URL.createObjectURL(f); $("vista").hidden = false;
+  $("zonaTexto").hidden = true; $("cambiar").hidden = false; $("error").textContent = "";
+}
+zona.onclick = () => input.click();
+zona.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } };
+input.onchange = () => elegirArchivo(input.files[0]);
+["dragenter", "dragover"].forEach((ev) => zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("arrastrando"); }));
+["dragleave", "drop"].forEach((ev) => zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.remove("arrastrando"); }));
+zona.addEventListener("drop", (e) => elegirArchivo(e.dataTransfer.files[0]));
+
+// miles con punto mientras se escribe
+["deducible", "valor"].forEach((id) => $(id).addEventListener("input", (e) => {
+  const d = e.target.value.replace(/\D/g, "");
+  e.target.value = d ? Number(d).toLocaleString("es-CL") : "";
+}));
+
+// Las fotos de celular pueden pesar varios MB: se reducen en el navegador antes de enviarlas.
+// El modelo trabaja a 224x224, así que 1600 px de lado es más que suficiente.
+async function reducir(archivo) {
+  try {
+    const bmp = await createImageBitmap(archivo, {imageOrientation: "from-image"});
+    const escala = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    if (escala === 1 && archivo.size < 2e6) return archivo;
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * escala); c.height = Math.round(bmp.height * escala);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.9));
+    return blob ? new File([blob], "foto.jpg", {type: "image/jpeg"}) : archivo;
+  } catch {
+    return archivo; // formato que el navegador no sabe leer (por ejemplo HEIC): se envía tal cual
+  }
+}
+
+const ERRORES_HTTP = {
+  413: "La foto pesa demasiado. Prueba con otra o tómala con menor resolución.",
+  502: "El servidor no respondió. Espera un momento e intenta de nuevo.",
+  503: "El servicio no está disponible en este momento. Intenta de nuevo en unos minutos.",
+  504: "El análisis tardó demasiado. Intenta de nuevo.",
+};
+
+$("form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("error").textContent = "";
+  if (!input.files[0]) { $("error").textContent = "Agrega una foto del daño para continuar."; zona.focus(); return; }
+  $("boton").disabled = true; $("boton").textContent = "Analizando la foto…";
+  try {
+    const datos = new FormData($("form"));
+    datos.set("foto", await reducir(input.files[0]));
+    const r = await fetch("/api/evaluar", { method: "POST", body: datos });
+    const tipo = r.headers.get("content-type") || "";
+    if (!tipo.includes("application/json")) {
+      throw new Error(ERRORES_HTTP[r.status] || `No pudimos evaluar la foto (error ${r.status}). Intenta de nuevo.`);
+    }
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "No pudimos evaluar la foto. Intenta de nuevo.");
+    mostrar(d);
+  } catch (err) {
+    $("error").textContent = err.message === "Failed to fetch" ? "Sin conexión con el servidor. Revisa tu internet e intenta de nuevo." : err.message;
+  } finally {
+    $("boton").disabled = false; $("boton").textContent = "Evaluar daño";
+  }
+};
+
+function mostrar(d) {
+  const dec = DECISIONES[d.decision_codigo] || DECISIONES.revision;
+  const carriles = ORDEN_SEV.map((s) => `<div class="carril s-${s} ${s === d.severidad ? "activo" : ""}"></div>`).join("");
+  const etiquetas = ORDEN_SEV.map((s) => `<span class="${s === d.severidad ? "activo" : ""}">${s[0].toUpperCase() + s.slice(1)}</span>`).join("");
+  $("resultado").innerHTML = `
+    <div class="veredicto">
+      <span class="tipo t-${dec.tono}">${dec.tipo}</span>
+      <h2>${dec.titulo}</h2>
+      <p>${dec.texto}</p>
+    </div>
+    <div class="bloque">
+      <h3>Gravedad del daño</h3>
+      <div class="calzada" role="img" aria-label="Gravedad: ${esc(d.severidad)}">${carriles}</div>
+      <div class="calzada-eti">${etiquetas}</div>
+    </div>
+    <div class="bloque">
+      <h3>Costo estimado de reparación</h3>
+      <div class="monto num">${clp(d.costo_estimado)}</div>
+      <div class="monto-rango num">Entre ${clp(d.rango[0])} y ${clp(d.rango[1])} para ${esc(d.pieza.toLowerCase())} en ${esc(d.vehiculo.toLowerCase())}</div>
+    </div>
+    <div class="bloque">
+      <div class="caso-fila">
+        <div>
+          <div class="secundario-txt">Tu número de caso</div>
+          <div class="codigo">${esc(d.id.toUpperCase())}</div>
+        </div>
+        <button type="button" class="boton secundario chico" id="copiar">Copiar número</button>
+      </div>
+      ${d.guardado ? "" : '<p class="error">El caso no quedó registrado. Guarda una captura de este resultado y vuelve a intentarlo más tarde.</p>'}
+    </div>
+    <div class="bloque">
+      <details class="tecnico">
+        <summary>Detalle del análisis</summary>
+        <dl class="datos">
+          <dt>Confianza</dt><dd class="num">${pct(d.confianza)}</dd>
+          <dt>Probabilidades</dt><dd class="num">${esc(probabilidadesTexto(d.probabilidades))}</dd>
+          <dt>Costo esperado</dt><dd class="num">${clp(d.costo_esperado)}</dd>
+          <dt>Modelo</dt><dd>${esc(d.modelo_version)}</dd>
+        </dl>
+      </details>
+    </div>`;
+  $("copiar").onclick = async () => {
+    try { await navigator.clipboard.writeText(d.id.toUpperCase()); avisar("Número de caso copiado"); }
+    catch { avisar("No se pudo copiar; anótalo a mano"); }
+  };
+  if (window.matchMedia("(max-width: 880px)").matches) $("resultado").scrollIntoView({behavior: "smooth", block: "start"});
+}
+</script>
+{% endblock %}

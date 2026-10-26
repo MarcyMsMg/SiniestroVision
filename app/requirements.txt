@@ -1,0 +1,6 @@
+flask
+gunicorn
+pillow
+numpy
+boto3
+ai-edge-litert

@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% block titulo %}Bandeja de casos · SiniestroVision{% endblock %}
+{% block contenido %}
+<main class="contenedor">
+  <div class="bandeja-cab">
+    <div>
+      <h1>Bandeja de casos</h1>
+      <p id="actualizado">Cargando casos…</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="boton secundario" href="/api/entrenamiento.zip" id="exportar">Exportar datos de entrenamiento</a>
+      <button type="button" class="boton secundario" id="actualizar">Actualizar</button>
+    </div>
+  </div>
+
+  <section class="indicadores" aria-label="Indicadores">
+    <div class="indicador"><div class="valor num" id="k-total">–</div><div class="nombre">Casos recibidos</div></div>
+    <div class="indicador"><div class="valor num" id="k-auto">–</div><div class="nombre">Resueltos sin liquidador</div></div>
+    <div class="indicador" id="i-pend"><div class="valor num" id="k-pend">–</div><div class="nombre">Esperan revisión</div></div>
+    <div class="indicador"><div class="valor num" id="k-conc">–</div><div class="nombre">Acuerdo con liquidadores</div></div>
+    <div class="indicador"><div class="valor num" id="k-costo">–</div><div class="nombre">Costo estimado total</div></div>
+  </section>
+
+  <div class="barra-herr">
+    <div class="pestanas" role="tablist" aria-label="Filtrar casos" id="pestanas">
+      <button role="tab" data-estado="pendiente_revision">Pendientes<span class="cuenta" data-c="pendiente_revision"></span></button>
+      <button role="tab" data-estado="">Todos<span class="cuenta" data-c=""></span></button>
+      <button role="tab" data-estado="resuelto_automatico">Automáticos<span class="cuenta" data-c="resuelto_automatico"></span></button>
+      <button role="tab" data-estado="revisado">Revisados<span class="cuenta" data-c="revisado"></span></button>
+      <button role="tab" data-estado="descartado">Descartados<span class="cuenta" data-c="descartado"></span></button>
+    </div>
+    <label class="buscar"><span class="sr">Buscar caso</span>
+      <input type="search" id="buscar" placeholder="Buscar caso o parte">
+    </label>
+  </div>
+
+  <div class="tabla-hoja">
+    <div class="tabla-wrap">
+      <table class="casos">
+        <thead><tr><th><span class="sr">Foto</span></th><th>Caso</th><th>Parte y vehículo</th><th>Gravedad</th><th>Confianza</th><th>Costo</th><th>Estado</th></tr></thead>
+        <tbody id="filas"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="pie" style="padding-top:18px" id="pieModelo"></footer>
+</main>
+
+<div class="velo oculto" id="velo"></div>
+<aside class="lateral" id="lateral" aria-hidden="true" aria-labelledby="latTitulo">
+  <div class="lateral-cab">
+    <h2 id="latTitulo">Caso</h2>
+    <span id="latEstado"></span>
+    <button type="button" class="cerrar" id="cerrar" aria-label="Cerrar detalle">×</button>
+  </div>
+  <div class="lateral-cuerpo" id="latCuerpo"></div>
+</aside>
+<div class="visor oculto" id="visor"><img id="visorImg" alt="Foto del siniestro ampliada"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const $ = (id) => document.getElementById(id);
+const SEVERIDADES = {{ severidades | tojson }};
+const PIEZAS = {{ piezas | tojson }};
+const VEHICULOS = {{ vehiculos | tojson }};
+const MOTIVOS = {{ motivos | tojson }};
+const ACCIONES = {revision: "Revisión", correccion: "Corrección de datos", descarte: "Descarte", restauracion: "Restauración"};
+const miles = (n) => n ? Math.round(n).toLocaleString("es-CL") : "";
+const AVISO = {ok: "ok", info: "info", revision: "revision", grave: "grave"};
+let casos = [], filtro = null, abierto = null;
+
+const capital = (s) => s ? s[0].toUpperCase() + s.slice(1) : "";
+const fechaLarga = (iso) => new Date(iso).toLocaleString("es-CL", {day: "numeric", month: "long", hour: "2-digit", minute: "2-digit"});
+function hace(iso) {
+  const min = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (min < 1) return "recién";
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  return new Date(iso).toLocaleDateString("es-CL", {day: "numeric", month: "short"});
+}
+
+async function api(url, opciones) {
+  const r = await fetch(url, opciones);
+  if (r.status === 401) { location.href = "/login?siguiente=/casos"; throw new Error("Sesión requerida"); }
+  if (!(r.headers.get("content-type") || "").includes("application/json")) throw new Error(`El servidor respondió con un error (${r.status}). Intenta de nuevo.`);
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || "Error del servidor");
+  return d;
+}
+
+async function cargar() {
+  const [m, d] = await Promise.all([api("/api/metricas"), api("/api/casos")]);
+  casos = d.casos;
+  $("k-total").textContent = m.total;
+  $("k-auto").textContent = pct(m.tasa_automatizacion);
+  $("k-pend").textContent = m.pendientes;
+  $("i-pend").classList.toggle("alerta", m.pendientes > 0);
+  $("k-conc").textContent = pct(m.concordancia_liquidador);
+  $("k-costo").textContent = clp(m.costo_estimado_total);
+  const mm = m.metricas_modelo || {};
+  $("pieModelo").textContent = `Modelo ${m.modelo}` + (mm.accuracy ? `: ${Math.round(mm.accuracy * 1000) / 10}% de acierto en pruebas.` : ".") +
+    " El acuerdo con liquidadores compara la gravedad del modelo con la confirmada en cada revisión." +
+    " Los casos descartados no cuentan en los indicadores ni en los datos de entrenamiento.";
+  $("actualizado").textContent = `Actualizado a las ${new Date().toLocaleTimeString("es-CL", {hour: "2-digit", minute: "2-digit"})}`;
+  if (filtro === null) filtro = m.pendientes > 0 ? "pendiente_revision" : "";
+  pintar();
+}
+
+function pintar() {
+  document.querySelectorAll("#pestanas button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.estado === filtro)));
+  document.querySelectorAll("#pestanas .cuenta").forEach((s) => {
+    const n = s.dataset.c ? casos.filter((c) => c.estado === s.dataset.c).length : casos.filter((c) => c.estado !== "descartado").length;
+    s.textContent = n;
+  });
+  const q = $("buscar").value.trim().toLowerCase();
+  const lista = casos.filter((c) => (filtro ? c.estado === filtro : c.estado !== "descartado") &&
+    (!q || c.id.includes(q) || c.pieza.toLowerCase().includes(q) || c.vehiculo.toLowerCase().includes(q)));
+  if (!lista.length) {
+    const msg = q ? ["Sin resultados", "Prueba con otro número de caso o parte del vehículo."]
+      : filtro === "pendiente_revision" ? ["No hay casos pendientes", "Los siniestros que necesiten revisión aparecerán aquí."]
+      : filtro === "descartado" ? ["No hay casos descartados", "Los casos con datos inválidos que descartes quedarán aquí, por si necesitas restaurarlos."]
+      : ["Todavía no hay casos", "Cada evaluación hecha desde el sitio del asegurado aparecerá aquí."];
+    $("filas").innerHTML = `<tr><td colspan="7"><div class="vacio"><strong>${msg[0]}</strong>${msg[1]}</div></td></tr>`;
+    return;
+  }
+  $("filas").innerHTML = lista.map((c) => {
+    const sev = c.severidad_revisada || c.severidad;
+    const nota = c.severidad_revisada && !c.coincide ? `<div class="secundario-txt">Modelo: ${esc(c.severidad)}</div>` : "";
+    return `<tr tabindex="0" data-id="${esc(c.id)}" aria-selected="${c.id === abierto}">
+      <td class="miniatura">${c.foto_url ? `<img class="mini" src="${esc(c.foto_url)}" alt="" loading="lazy">` : '<div class="mini"></div>'}</td>
+      <td><strong>${esc(c.id.toUpperCase())}</strong><div class="secundario-txt">${hace(c.fecha)}</div></td>
+      <td>${esc(c.pieza)}<div class="secundario-txt">${esc(c.vehiculo)}</div></td>
+      <td><span class="sev sev-${esc(sev)}">${capital(esc(sev))}</span>${nota}</td>
+      <td><div class="conf"><div class="pista"><div class="relleno" style="width:${Math.round(c.confianza * 100)}%"></div></div><span class="num">${pct(c.confianza)}</span></div></td>
+      <td class="num">${clp(c.costo_revisado ?? c.costo_estimado)}</td>
+      <td><span class="chip e-${esc(c.estado)}">${ESTADOS[c.estado] || esc(c.estado)}</span></td>
+    </tr>`;
+  }).join("");
+  document.querySelectorAll("#filas tr[data-id]").forEach((tr) => {
+    tr.onclick = () => abrir(tr.dataset.id);
+    tr.onkeydown = (e) => { if (e.key === "Enter") abrir(tr.dataset.id); };
+  });
+}
+
+async function abrir(id) {
+  abierto = id;
+  document.querySelectorAll("#filas tr[data-id]").forEach((tr) => tr.setAttribute("aria-selected", String(tr.dataset.id === id)));
+  const c = await api("/api/casos/" + encodeURIComponent(id));
+  const actual = c.severidad_revisada || c.severidad;
+  $("latTitulo").textContent = "Caso " + c.id.toUpperCase();
+  $("latEstado").innerHTML = `<span class="chip e-${esc(c.estado)}">${ESTADOS[c.estado] || esc(c.estado)}</span>`;
+  const descartado = c.estado === "descartado";
+  const resumenRevision = c.estado === "revisado"
+    ? `<div class="historial"><strong>${esc(c.revisor)}</strong> revisó este caso el ${fechaLarga(c.fecha_revision)}<br>
+       Gravedad confirmada: <strong>${esc(c.severidad_revisada)}</strong>, ${c.coincide ? "igual que el modelo" : "distinta a la del modelo"}<br>
+       Costo ajustado: <span class="num">${clp(c.costo_revisado)}</span>${c.comentario ? `<br>Comentario: ${esc(c.comentario)}` : ""}</div>` : "";
+  const cabecera = descartado
+    ? `<div class="aviso descartado">Caso descartado: ${esc(MOTIVOS[c.motivo_descarte] || c.motivo_descarte)}${c.nota_descarte ? `. ${esc(c.nota_descarte)}` : ""}
+         <div class="aviso-sub">Descartado por ${esc(c.descartado_por)} el ${fechaLarga(c.fecha_descarte)}<br>No cuenta en los indicadores ni en los datos de entrenamiento.</div>
+         <button type="button" class="boton secundario chico" id="restaurar" style="margin-top:10px">Restaurar caso</button></div>`
+    : `<div class="aviso ${AVISO[c.nivel] || "info"}">${esc(c.decision)}</div>`;
+  const opciones = (lista, actual) => lista.map((x) => `<option ${x === actual ? "selected" : ""}>${esc(x)}</option>`).join("");
+  const historial = (c.historial || []).slice().reverse().map((h) =>
+    `<li><strong>${esc(ACCIONES[h.accion] || h.accion)}</strong>, ${esc(h.usuario)}, ${fechaLarga(h.fecha)}<br><span class="secundario-txt">${esc(h.detalle)}</span></li>`).join("");
+  $("latCuerpo").innerHTML = `
+    ${c.foto_url ? `<img class="foto-caso" id="fotoCaso" src="${esc(c.foto_url)}" alt="Foto del siniestro">` : '<div class="foto-falta">La foto no está disponible.</div>'}
+    ${cabecera}
+    <div id="vistaDatos">
+      <dl class="datos">
+        <dt>Recibido</dt><dd>${fechaLarga(c.fecha)}</dd>
+        <dt>Parte</dt><dd>${esc(c.pieza)}</dd>
+        <dt>Vehículo</dt><dd>${esc(c.vehiculo)}</dd>
+        <dt>Gravedad del modelo</dt><dd><span class="sev sev-${esc(c.severidad)}">${capital(esc(c.severidad))}</span> con ${pct(c.confianza)} de confianza</dd>
+        <dt>Probabilidades</dt><dd class="num">${esc(probabilidadesTexto(c.probabilidades))}</dd>
+        <dt>Costo estimado</dt><dd class="num">${clp(c.costo_estimado)} (esperado ${clp(c.costo_esperado)})</dd>
+        <dt>Deducible</dt><dd class="num">${c.deducible ? clp(c.deducible) : "No informado"}</dd>
+        <dt>Valor del auto</dt><dd class="num">${c.valor_comercial ? clp(c.valor_comercial) : "No informado"}</dd>
+        <dt>Modelo</dt><dd>${esc(c.modelo_version)}</dd>
+      </dl>
+      <button type="button" class="boton secundario chico" id="abrirCorreccion" style="margin-top:12px">Corregir datos</button>
+    </div>
+    <form id="formDatos" class="seccion" hidden>
+      <h3>Corregir datos del siniestro</h3>
+      <div class="par campo">
+        <div><label for="cPieza">Parte</label><select id="cPieza">${opciones(PIEZAS, c.pieza)}</select></div>
+        <div><label for="cVehiculo">Vehículo</label><select id="cVehiculo">${opciones(VEHICULOS, c.vehiculo)}</select></div>
+      </div>
+      <div class="par campo">
+        <div><label for="cDeducible">Deducible</label><div class="prefijo"><span>$</span><input type="text" id="cDeducible" inputmode="numeric" value="${miles(c.deducible)}"></div></div>
+        <div><label for="cValor">Valor del auto</label><div class="prefijo"><span>$</span><input type="text" id="cValor" inputmode="numeric" value="${miles(c.valor_comercial)}"></div></div>
+      </div>
+      <div class="campo">
+        <label for="cMotivo">Motivo de la corrección</label>
+        <input type="text" id="cMotivo" maxlength="300" placeholder="Por ejemplo: el asegurado eligió la parte equivocada">
+      </div>
+      <p class="sugerencia">La gravedad que detectó el modelo no cambia; se recalculan el costo y la decisión. Los datos originales quedan en el historial.</p>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button type="submit" class="boton">Guardar corrección</button>
+        <button type="button" class="boton secundario" id="cancelarCorreccion">Cancelar</button>
+      </div>
+      <div class="error" id="errDatos" role="alert"></div>
+    </form>
+    ${descartado ? "" : `
+    <div class="seccion">
+      <h3>${c.estado === "revisado" ? "Revisión" : "Tu revisión"}</h3>
+      ${resumenRevision}
+      <div class="campo" style="margin-top:${resumenRevision ? "14px" : "0"}">
+        <span class="etiqueta-campo" id="segEti">Gravedad confirmada</span>
+        <div class="segmentos" role="radiogroup" aria-labelledby="segEti">
+          ${ORDEN_SEV.filter((s) => SEVERIDADES.includes(s)).map((s) => `<label><input type="radio" name="sev" value="${s}" ${s === (c.severidad_revisada || c.severidad) ? "checked" : ""}><span>${s}</span></label>`).join("")}
+        </div>
+        <p class="sugerencia">Viene marcada la gravedad ${c.estado === "revisado" ? "ya confirmada" : "que propuso el modelo"}. Cámbiala si no estás de acuerdo.</p>
+      </div>
+      <div class="campo">
+        <label for="com">Comentario para el expediente</label>
+        <textarea id="com" rows="3" maxlength="500" placeholder="Opcional, por ejemplo: daño en el pilar, requiere grúa">${esc(c.comentario || "")}</textarea>
+      </div>
+      <button type="button" class="boton ancho" id="guardar">${c.estado === "revisado" ? "Actualizar revisión" : "Guardar revisión"}</button>
+      <div class="error" id="errRev" role="alert"></div>
+    </div>`}
+    ${historial ? `<div class="seccion"><h3>Historial del caso</h3><ul class="bitacora">${historial}</ul></div>` : ""}
+    ${descartado ? "" : `
+    <div class="seccion">
+      <button type="button" class="enlace-peligro" id="abrirDescarte">Descartar caso</button>
+      <form id="formDescarte" hidden>
+        <p class="sugerencia" style="margin:0 0 12px">El caso no se borra: queda guardado para auditoría, pero sale de los indicadores y de los datos para reentrenar el modelo. Puedes restaurarlo después.</p>
+        <fieldset class="motivos">
+          <legend class="etiqueta-campo">Motivo</legend>
+          ${Object.entries(MOTIVOS).map(([k, v]) => `<label><input type="radio" name="motivo" value="${k}"> ${esc(v)}</label>`).join("")}
+        </fieldset>
+        <div class="campo">
+          <label for="nDescarte">Detalle</label>
+          <input type="text" id="nDescarte" maxlength="300" placeholder="Obligatorio si eliges Otro motivo">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button type="submit" class="boton peligro">Descartar caso</button>
+          <button type="button" class="boton secundario" id="cancelarDescarte">Cancelar</button>
+        </div>
+        <div class="error" id="errDescarte" role="alert"></div>
+      </form>
+    </div>`}`;
+  if ($("fotoCaso")) $("fotoCaso").onclick = () => { $("visorImg").src = c.foto_url; $("visor").classList.remove("oculto"); };
+  if ($("guardar")) $("guardar").onclick = () => revisar(c);
+  ["cDeducible", "cValor"].forEach((id) => $(id).addEventListener("input", (e) => {
+    const d = e.target.value.replace(/\D/g, ""); e.target.value = d ? Number(d).toLocaleString("es-CL") : "";
+  }));
+  $("abrirCorreccion").onclick = () => { $("formDatos").hidden = false; $("abrirCorreccion").hidden = true; $("cMotivo").focus(); };
+  $("cancelarCorreccion").onclick = () => { $("formDatos").hidden = true; $("abrirCorreccion").hidden = false; };
+  $("formDatos").onsubmit = (e) => { e.preventDefault(); corregir(c); };
+  if ($("abrirDescarte")) {
+    $("abrirDescarte").onclick = () => { $("formDescarte").hidden = false; $("abrirDescarte").hidden = true; };
+    $("cancelarDescarte").onclick = () => { $("formDescarte").hidden = true; $("abrirDescarte").hidden = false; };
+    $("formDescarte").onsubmit = (e) => { e.preventDefault(); descartar(c); };
+  }
+  if ($("restaurar")) $("restaurar").onclick = () => restaurar(c);
+  $("velo").classList.remove("oculto");
+  $("lateral").classList.add("abierto"); $("lateral").setAttribute("aria-hidden", "false");
+  $("cerrar").focus();
+}
+
+function cerrar() {
+  abierto = null;
+  $("lateral").classList.remove("abierto"); $("lateral").setAttribute("aria-hidden", "true");
+  $("velo").classList.add("oculto");
+  document.querySelectorAll("#filas tr[data-id]").forEach((tr) => tr.setAttribute("aria-selected", "false"));
+}
+
+async function revisar(c) {
+  const sev = document.querySelector('input[name="sev"]:checked').value;
+  const eraPendiente = c.estado === "pendiente_revision";
+  $("guardar").disabled = true;
+  try {
+    await api(`/api/casos/${encodeURIComponent(c.id)}/revision`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({severidad: sev, comentario: $("com").value}),
+    });
+    await cargar();
+    const siguiente = eraPendiente && filtro === "pendiente_revision" ? casos.find((x) => x.estado === "pendiente_revision") : null;
+    if (siguiente) { avisar("Revisión guardada. Abriendo el siguiente pendiente"); abrir(siguiente.id); }
+    else { avisar(eraPendiente ? "Revisión guardada" : "Revisión actualizada"); abrir(c.id); }
+  } catch (e) {
+    $("errRev").textContent = e.message;
+    $("guardar").disabled = false;
+  }
+}
+
+async function accion(c, ruta, cuerpo, errId, mensaje) {
+  try {
+    await api(`/api/casos/${encodeURIComponent(c.id)}/${ruta}`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(cuerpo || {}),
+    });
+    await cargar();
+    avisar(mensaje);
+    abrir(c.id);
+  } catch (e) {
+    if (errId && $(errId)) $(errId).textContent = e.message; else avisar(e.message);
+  }
+}
+const numero = (id) => $(id).value.replace(/\D/g, "") || "0";
+function corregir(c) {
+  accion(c, "datos", {pieza: $("cPieza").value, vehiculo: $("cVehiculo").value,
+    deducible: numero("cDeducible"), valor_comercial: numero("cValor"), motivo: $("cMotivo").value}, "errDatos", "Datos corregidos");
+}
+function descartar(c) {
+  const m = document.querySelector('input[name="motivo"]:checked');
+  if (!m) { $("errDescarte").textContent = "Elige un motivo."; return; }
+  accion(c, "descartar", {motivo: m.value, nota: $("nDescarte").value}, "errDescarte", "Caso descartado");
+}
+function restaurar(c) { accion(c, "restaurar", {}, null, "Caso restaurado"); }
+
+$("pestanas").onclick = (e) => { const b = e.target.closest("button"); if (b) { filtro = b.dataset.estado; pintar(); } };
+$("buscar").oninput = pintar;
+$("actualizar").onclick = async () => { await cargar(); avisar("Bandeja actualizada"); };
+$("cerrar").onclick = cerrar;
+$("velo").onclick = cerrar;
+$("visor").onclick = () => $("visor").classList.add("oculto");
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!$("visor").classList.contains("oculto")) $("visor").classList.add("oculto"); else if (abierto) cerrar();
+});
+cargar();
+</script>
+{% endblock %}

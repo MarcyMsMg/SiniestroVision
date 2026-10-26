@@ -1,0 +1,17 @@
+[Unit]
+Description=SiniestroVision - evaluador de danos vehiculares
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/app
+Environment=BUCKET_S3=TU-BUCKET
+Environment=TABLA_DYNAMO=siniestros
+Environment=AWS_REGION=us-east-2
+Environment=PANEL_CLAVE=CAMBIA-ESTA-CLAVE
+Environment=SECRET_KEY=CAMBIA-ESTE-SECRETO
+ExecStart=/home/ubuntu/app/venv/bin/gunicorn -w 1 -b 0.0.0.0:5000 --timeout 120 --access-logfile - app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

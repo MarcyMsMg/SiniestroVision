@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titulo %}SiniestroVision{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f3b4c'/%3E%3Cpath d='M16 5v5M16 14v4M16 22v5' stroke='%23f2b705' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<header class="cabecera">
+  <div class="cabecera-in">
+    <a class="marca" href="{{ url_for('panel_casos') if interno else url_for('inicio') }}">
+      <svg class="marca-logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#ffffff" fill-opacity=".12"/><path d="M16 5v5M16 14v4M16 22v5" stroke="#f2b705" stroke-width="3" stroke-linecap="round"/></svg>
+      <span><span class="marca-nombre">SiniestroVision</span><span class="marca-sub">{{ 'Bandeja de liquidadores' if interno else 'Evaluación de daños vehiculares' }}</span></span>
+    </a>
+    <nav aria-label="Principal">
+      {% if interno %}
+        <a href="{{ url_for('panel_casos') }}" {% if request.endpoint == 'panel_casos' %}aria-current="page"{% endif %}>Bandeja</a>
+        <a href="{{ url_for('inicio') }}" target="_blank" rel="noopener">Ver sitio del asegurado</a>
+        {% if session.get('liquidador') %}<span class="quien">{{ session['liquidador'] }}</span><a href="{{ url_for('logout') }}">Salir</a>{% endif %}
+      {% endif %}
+    </nav>
+  </div>
+</header>
+<div class="demarcacion" aria-hidden="true"></div>
+{% block contenido %}{% endblock %}
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+  const clp = (n) => "$" + Math.round(n || 0).toLocaleString("es-CL");
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+  const pct = (x) => x == null ? "–" : Math.round(x * 100) + "%";
+  const ORDEN_SEV = ["leve", "moderado", "grave"];
+  const probabilidadesTexto = (p) => ORDEN_SEV.filter((s) => s in p).map((s) => `${s} ${pct(p[s])}`).join(" / ");
+  const ESTADOS = {resuelto_automatico: "Automático", pendiente_revision: "Pendiente", revisado: "Revisado", descartado: "Descartado"};
+  function avisar(texto) {
+    const t = document.getElementById("toast");
+    t.textContent = texto; t.classList.add("visible");
+    clearTimeout(avisar.t); avisar.t = setTimeout(() => t.classList.remove("visible"), 2600);
+  }
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

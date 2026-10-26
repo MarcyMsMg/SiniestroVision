@@ -1,0 +1,12 @@
+{
+  "clases": [
+    "minor",
+    "moderate",
+    "severe"
+  ],
+  "img_size": 224,
+  "metricas_test": {
+    "accuracy": 0.7037,
+    "f1_macro": 0.7036
+  }
+}

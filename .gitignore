@@ -1,0 +1,15 @@
+# Entornos y caché
+venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Credenciales: nunca al repositorio
+*.pem
+kaggle.json
+.env
+
+# Artefactos pesados del entrenamiento
+*.keras
+saved_model_danos/
+*.zip

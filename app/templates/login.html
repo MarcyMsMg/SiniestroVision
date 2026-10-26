@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titulo %}Ingreso de liquidadores · SiniestroVision{% endblock %}
+{% block contenido %}
+<main class="contenedor ingreso">
+  <div class="hoja">
+    <h1>Ingreso de liquidadores</h1>
+    <p>La bandeja contiene fotos y datos de siniestros. Solo para personal autorizado.</p>
+    <form method="post">
+      <div class="campo">
+        <label for="nombre">Nombre</label>
+        <input type="text" id="nombre" name="nombre" required maxlength="60" autocomplete="name">
+      </div>
+      <div class="campo">
+        <label for="clave">Clave</label>
+        <input type="password" id="clave" name="clave" required autocomplete="current-password">
+      </div>
+      <button class="boton ancho" type="submit">Ingresar</button>
+      {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+    </form>
+  </div>
+</main>
+{% endblock %}
